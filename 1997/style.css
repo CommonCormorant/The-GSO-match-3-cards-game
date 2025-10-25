@@ -195,7 +195,10 @@
         .card[data-color="black"] { color: var(--black-card); }
         .card[data-suit="joker"][data-color="red"] { background-image: linear-gradient(135deg, #ff758c 0%, #ff7eb3 100%); color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
         .card[data-suit="joker"][data-color="black"] { background-image: linear-gradient(135deg, #6a85b6 0%, #bac8e0 100%); color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
-
+        .card.empty {
+            background-color: rgba(0,0,0,0.2);
+            color: rgba(255,255,255,0.3);
+        }
         #game-over-screen {
             position: absolute;
             top: 0; left: 0; right: 0; bottom: 0;
