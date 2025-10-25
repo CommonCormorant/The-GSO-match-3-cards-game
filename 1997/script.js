@@ -311,54 +311,63 @@ async function applyGravityAndRefill() {
     const animationPromises = [];
 
     for (let c = 0; c < COLS; c++) {
-        const currentColumnCards = [];
+        const column = [];
         for (let r = 0; r < ROWS; r++) {
             if (board[r][c]) {
-                currentColumnCards.push(board[r][c]);
+                column.push(board[r][c]);
             }
         }
 
-        const realCards = currentColumnCards.filter(card => card.suit !== 'empty');
-        const emptyCards = currentColumnCards.filter(card => card.suit === 'empty');
+        const realCards = column.filter(card => card.suit !== 'empty');
+        const emptyCards = column.filter(card => card.suit === 'empty');
 
-        let writeRow = 0;
-        for (const card of emptyCards) {
-            board[writeRow++][c] = card;
-        }
-        const realCardsStartRow = ROWS - realCards.length;
-        while (writeRow < realCardsStartRow) {
-            board[writeRow++][c] = null;
-        }
-        for (const card of realCards) {
-            board[writeRow++][c] = card;
-        }
+        const newColumn = [
+            ...emptyCards,
+            ...Array(ROWS - realCards.length - emptyCards.length).fill(null),
+            ...realCards
+        ];
 
-        currentColumnCards.forEach(card => {
-            const cardEl = Array.from(gameBoard.children).find(el => el.dataset.id == card.id);
-            if (cardEl) {
-                let newRow = -1;
-                for (let r = 0; r < ROWS; r++) {
-                    if (board[r][c] && board[r][c].id === card.id) {
-                        newRow = r;
-                        break;
-                    }
-                }
-
-                if (newRow !== -1 && newRow !== parseInt(cardEl.dataset.r)) {
-                    cardEl.dataset.r = newRow;
-                    cardEl.style.transition = 'top 0.4s ease-in';
-                    cardEl.style.top = `${(newRow / ROWS) * 100}%`;
-                    animationPromises.push(new Promise(res => {
-                        const onEnd = () => { cardEl.removeEventListener('transitionend', onEnd); res(); };
-                        cardEl.addEventListener('transitionend', onEnd);
-                    }));
-                }
+        for (let r = 0; r < ROWS; r++) {
+            if (board[r][c] !== newColumn[r]) {
+                board[r][c] = newColumn[r];
             }
-        });
+        }
     }
+
+    // Animate existing cards
+    const allCards = Array.from(gameBoard.children);
+    allCards.forEach(cardEl => {
+        const id = isNaN(parseInt(cardEl.dataset.id)) ? cardEl.dataset.id : parseInt(cardEl.dataset.id);
+        let newRow = -1;
+        let newCol = -1;
+
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                if (board[r][c] && board[r][c].id === id) {
+                    newRow = r;
+                    newCol = c;
+                    break;
+                }
+            }
+            if (newRow !== -1) break;
+        }
+
+        if (newRow !== -1 && (newRow !== parseInt(cardEl.dataset.r) || newCol !== parseInt(cardEl.dataset.c))) {
+            cardEl.dataset.r = newRow;
+            cardEl.dataset.c = newCol;
+            cardEl.style.transition = 'top 0.4s ease-in, left 0.4s ease-in';
+            cardEl.style.top = `${(newRow / ROWS) * 100}%`;
+            cardEl.style.left = `${(newCol / COLS) * 100}%`;
+            animationPromises.push(new Promise(res => {
+                const onEnd = () => { cardEl.removeEventListener('transitionend', onEnd); res(); };
+                cardEl.addEventListener('transitionend', onEnd);
+            }));
+        }
+    });
 
     await Promise.all(animationPromises);
 
+    // Refill empty spots
     for (let c = 0; c < COLS; c++) {
         for (let r = 0; r < ROWS; r++) {
             if (board[r][c] === null) {
@@ -373,7 +382,7 @@ async function applyGravityAndRefill() {
     }
 
     setTimeout(() => {
-        gameBoard.querySelectorAll('.card').forEach(el => el.style.transition = '');
+        gameBoard.querySelectorAll('.card').forEach(el => el.style.transition = '';
     }, 500);
 
     updateUI();
