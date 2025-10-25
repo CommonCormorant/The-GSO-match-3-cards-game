@@ -19,29 +19,36 @@ const CardMatch3Game = () => {
   const SUIT_COLORS = { '♣': 'black', '♦': 'red', '♥': 'red', '♠': 'black' };
 
   const createDeck = () => {
-    const cards = [];
-    // Three decks shuffled together
-    for (let d = 0; d < 3; d++) {
-      cards.push({ id: 0 + d * 54, suit: 'JOKER', color: 'red', rank: 0 });
+    const createSingleDeck = (deckIndex) => {
+      const cards = [];
+      cards.push({ id: 0 + deckIndex * 54, suit: 'JOKER', color: 'red', rank: 0 });
       for (let s = 0; s < 4; s++) {
         for (let r = 1; r <= 13; r++) {
-          cards.push({ 
-            id: s * 13 + r + d * 54, 
-            suit: SUITS[s], 
-            color: SUIT_COLORS[SUITS[s]], 
-            rank: r 
+          cards.push({
+            id: s * 13 + r + deckIndex * 54,
+            suit: SUITS[s],
+            color: SUIT_COLORS[SUITS[s]],
+            rank: r
           });
         }
       }
-      cards.push({ id: 53 + d * 54, suit: 'JOKER', color: 'black', rank: 0 });
-    }
-    
-    // Shuffle
-    for (let i = cards.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [cards[i], cards[j]] = [cards[j], cards[i]];
-    }
-    return cards;
+      cards.push({ id: 53 + deckIndex * 54, suit: 'JOKER', color: 'black', rank: 0 });
+      return cards;
+    };
+
+    const shuffleDeck = (deck) => {
+      for (let i = deck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [deck[i], deck[j]] = [deck[j], deck[i]];
+      }
+      return deck;
+    };
+
+    const deck1 = shuffleDeck(createSingleDeck(0));
+    const deck2 = shuffleDeck(createSingleDeck(1));
+    const deck3 = shuffleDeck(createSingleDeck(2));
+
+    return [...deck1, ...deck2, ...deck3];
   };
 
   const startGame = (selectedMode) => {
