@@ -219,54 +219,70 @@ async function swapCardsUI(r1, c1, r2, c2) {
 
 // --- Match Resolution & Board Update ---
 
-function findMatches(currentBoard) {
+function findMatches(board) {
     const matches = new Set();
-    const rows = currentBoard.length;
-    const cols = currentBoard[0].length;
+    const rows = board.length;
+    const cols = board[0].length;
 
+    const checkMatch = (firstCard, otherCard) => {
+        if (!firstCard || !otherCard || firstCard.suit === 'empty' || otherCard.suit === 'empty') {
+            return false;
+        }
+        if (otherCard.isJoker) { // If the card being checked is a joker, it's a match if colors align
+            return firstCard.color === otherCard.color;
+        }
+        if (firstCard.isJoker) { // If the first card is a joker, the other (non-joker) card matches if colors align
+            return firstCard.color === otherCard.color;
+        }
+        // Otherwise, for two non-jokers, suits must be the same
+        return firstCard.suit === otherCard.suit;
+    };
+
+    // Check horizontal matches
     for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols - 2; c++) {
-            if (!currentBoard[r][c] || currentBoard[r][c].suit === 'empty') continue;
+        for (let c = 0; c < cols; c++) {
+            if (!board[r][c] || board[r][c].suit === 'empty') continue;
 
-            const card1 = currentBoard[r][c];
-            const group = [card1];
-            let k = c + 1;
-            while(k < cols && isMatch(card1, currentBoard[r][k])) {
-                group.push(currentBoard[r][k]);
-                k++;
+            const firstCard = board[r][c];
+            const horizontalMatch = [board[r][c]];
+            for (let i = c + 1; i < cols; i++) {
+                if (checkMatch(firstCard, board[r][i])) {
+                    horizontalMatch.push(board[r][i]);
+                } else {
+                    break;
+                }
             }
-            if(group.length >= 3) {
-                for(let i=0; i<group.length; i++) matches.add(`${r},${c+i}`);
+            if (horizontalMatch.length >= 3) {
+                for(let i = 0; i < horizontalMatch.length; i++) {
+                    matches.add(`${r},${c + i}`);
+                }
             }
         }
     }
 
+    // Check vertical matches
     for (let c = 0; c < cols; c++) {
-        for (let r = 0; r < rows - 2; r++) {
-            if (!currentBoard[r][c] || currentBoard[r][c].suit === 'empty') continue;
+        for (let r = 0; r < rows; r++) {
+            if (!board[r][c] || board[r][c].suit === 'empty') continue;
 
-            const card1 = currentBoard[r][c];
-            const group = [card1];
-            let k = r + 1;
-            while(k < rows && isMatch(card1, currentBoard[k][c])) {
-                group.push(currentBoard[k][c]);
-                k++;
+            const firstCard = board[r][c];
+            const verticalMatch = [board[r][c]];
+            for (let i = r + 1; i < rows; i++) {
+                 if (checkMatch(firstCard, board[i][c])) {
+                    verticalMatch.push(board[i][c]);
+                } else {
+                    break;
+                }
             }
-            if(group.length >= 3) {
-                for(let i=0; i<group.length; i++) matches.add(`${r+i},${c}`);
+            if (verticalMatch.length >= 3) {
+                for(let i = 0; i < verticalMatch.length; i++) {
+                    matches.add(`${r + i},${c}`);
+                }
             }
         }
     }
+
     return Array.from(matches).map(pos => pos.split(',').map(Number));
-}
-
-
-function isMatch(card1, card2) {
-    if (!card1 || !card2 || card1.suit === 'empty' || card2.suit === 'empty') return false;
-    if (card1.isJoker && card2.isJoker) return card1.color === card2.color;
-    if (card1.isJoker) return card1.color === card2.color;
-    if (card2.isJoker) return card2.color === card1.color;
-    return card1.suit === card2.suit;
 }
 
 async function resolveInitialMatches() {
@@ -280,7 +296,6 @@ async function resolveInitialMatches() {
 
 async function resolveMatches(matches, isPlayerMove, isInitialCascade = false) {
     let currentMatches = matches;
-    let isFirstMatchInCascade = true;
     let cascadeScore = 0;
 
     while (currentMatches.length > 0) {
@@ -288,7 +303,7 @@ async function resolveMatches(matches, isPlayerMove, isInitialCascade = false) {
         const matchScore = scoreMap[currentMatches.length] || 20;
         score += matchScore;
 
-        if (gameMode === 'entrepreneur' && (isInitialCascade || (isPlayerMove && !isFirstMatchInCascade))) {
+        if (gameMode === 'entrepreneur' && (isInitialCascade || isPlayerMove)) {
             cascadeScore += matchScore;
         }
 
@@ -305,7 +320,6 @@ async function resolveMatches(matches, isPlayerMove, isInitialCascade = false) {
         await applyGravityAndRefill();
 
         currentMatches = findMatches(board);
-        isFirstMatchInCascade = false;
     }
 
     if (cascadeScore > 0) {
@@ -405,14 +419,21 @@ function checkGameOver() {
     if (findMatches(board).length > 0) return false;
 
     const hasJoker = board.flat().some(c => c && c.isJoker);
-    if (grant > 0 || hasJoker) {
+    const canAffordMove = grant > 0 || hasJoker;
+
+    if (canAffordMove) {
         const suitCounts = { clubs:0, diamonds:0, hearts:0, spades:0 };
         let redJokers = 0, blackJokers = 0;
         board.flat().forEach(c => {
             if (!c || c.suit === 'empty') return;
-            if (c.isJoker) (c.color === 'red' ? redJokers++ : blackJokers++);
-            else suitCounts[c.suit]++;
+            if (c.isJoker) {
+                if (c.color === 'red') redJokers++;
+                else blackJokers++;
+            } else {
+                suitCounts[c.suit]++;
+            }
         });
+
         if (suitCounts.diamonds + redJokers >= 3) return false;
         if (suitCounts.hearts + redJokers >= 3) return false;
         if (suitCounts.clubs + blackJokers >= 3) return false;
