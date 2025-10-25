@@ -187,8 +187,8 @@ async function attemptSwap(r1, c1, r2, c2) {
 
     await swapCardsUI(r1, c1, r2, c2);
 
-    const matches = findMatches();
-    if (matches.size > 0) {
+    const matches = findMatches(board);
+    if (matches.length > 0) {
         await resolveMatches(matches, true);
     } else {
         isProcessing = false;
@@ -219,29 +219,47 @@ async function swapCardsUI(r1, c1, r2, c2) {
 
 // --- Match Resolution & Board Update ---
 
-function findMatches() {
+function findMatches(currentBoard) {
     const matches = new Set();
-    const checkLine = (line) => {
-        if (line.length < 3) return;
-        let start = 0;
-        for (let i = 1; i <= line.length; i++) {
-            if (i === line.length || !isMatch(line[start].card, line[i].card)) {
-                if (i - start >= 3) {
-                    for (let j = start; j < i; j++) matches.add(`${line[j].r},${line[j].c}`);
-                }
-                start = i;
+    const rows = currentBoard.length;
+    const cols = currentBoard[0].length;
+
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols - 2; c++) {
+            if (!currentBoard[r][c] || currentBoard[r][c].suit === 'empty') continue;
+
+            const card1 = currentBoard[r][c];
+            const group = [card1];
+            let k = c + 1;
+            while(k < cols && isMatch(card1, currentBoard[r][k])) {
+                group.push(currentBoard[r][k]);
+                k++;
+            }
+            if(group.length >= 3) {
+                for(let i=0; i<group.length; i++) matches.add(`${r},${c+i}`);
             }
         }
-    };
+    }
 
-    for (let r = 0; r < ROWS; r++) {
-        checkLine(board[r].map((card, c) => ({ card, r, c })).filter(item => item.card));
+    for (let c = 0; c < cols; c++) {
+        for (let r = 0; r < rows - 2; r++) {
+            if (!currentBoard[r][c] || currentBoard[r][c].suit === 'empty') continue;
+
+            const card1 = currentBoard[r][c];
+            const group = [card1];
+            let k = r + 1;
+            while(k < rows && isMatch(card1, currentBoard[k][c])) {
+                group.push(currentBoard[k][c]);
+                k++;
+            }
+            if(group.length >= 3) {
+                for(let i=0; i<group.length; i++) matches.add(`${r+i},${c}`);
+            }
+        }
     }
-    for (let c = 0; c < COLS; c++) {
-        checkLine(board.map((row, r) => ({ card: row[c], r, c })).filter(item => item.card));
-    }
-    return matches;
+    return Array.from(matches).map(pos => pos.split(',').map(Number));
 }
+
 
 function isMatch(card1, card2) {
     if (!card1 || !card2 || card1.suit === 'empty' || card2.suit === 'empty') return false;
@@ -253,7 +271,7 @@ function isMatch(card1, card2) {
 
 async function resolveInitialMatches() {
     let matches;
-    while ((matches = findMatches()).size > 0) {
+    while ((matches = findMatches(board)).length > 0) {
         await resolveMatches(matches, false, true); // Pass true for isInitialCascade
     }
     isProcessing = false;
@@ -261,20 +279,20 @@ async function resolveInitialMatches() {
 }
 
 async function resolveMatches(matches, isPlayerMove, isInitialCascade = false) {
-    let cascadeScore = 0;
+    let currentMatches = matches;
     let isFirstMatchInCascade = true;
+    let cascadeScore = 0;
 
-    while (matches.size > 0) {
+    while (currentMatches.length > 0) {
         const scoreMap = { 3: 1, 4: 4 };
-        const matchScore = scoreMap[matches.size] || 20;
+        const matchScore = scoreMap[currentMatches.length] || 20;
         score += matchScore;
 
         if (gameMode === 'entrepreneur' && (isInitialCascade || (isPlayerMove && !isFirstMatchInCascade))) {
             cascadeScore += matchScore;
         }
 
-        matches.forEach(key => {
-            const [r, c] = key.split(',').map(Number);
+        currentMatches.forEach(([r, c]) => {
             const cardEl = Array.from(gameBoard.children).find(el => el.dataset.r == r && el.dataset.c == c);
             if (cardEl) cardEl.classList.add('removing');
             board[r][c] = null;
@@ -286,7 +304,7 @@ async function resolveMatches(matches, isPlayerMove, isInitialCascade = false) {
         gameBoard.querySelectorAll('.removing').forEach(el => el.remove());
         await applyGravityAndRefill();
 
-        matches = findMatches();
+        currentMatches = findMatches(board);
         isFirstMatchInCascade = false;
     }
 
@@ -384,7 +402,7 @@ async function applyGravityAndRefill() {
 
 function checkGameOver() {
     if (deckIndex < deck.length) return false;
-    if (findMatches().size > 0) return false;
+    if (findMatches(board).length > 0) return false;
 
     const hasJoker = board.flat().some(c => c && c.isJoker);
     if (grant > 0 || hasJoker) {
