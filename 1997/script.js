@@ -109,6 +109,7 @@ function createCardElement(cardData, r, c, isNew = false) {
     if (cardData.suit === 'empty') {
         cardEl.classList.add('empty');
     }
+    cardEl.dataset.id = cardData.id;
     cardEl.dataset.r = r;
     cardEl.dataset.c = c;
     cardEl.dataset.suit = cardData.suit;
@@ -171,7 +172,6 @@ function handleCardClick(event) {
 async function attemptSwap(r1, c1, r2, c2) {
     const card1 = board[r1][c1];
     const card2 = board[r2][c2];
-
     const isJokerMove = card1.isJoker || card2.isJoker;
 
     if (!isJokerMove && grant <= 0) {
@@ -217,7 +217,6 @@ async function swapCardsUI(r1, c1, r2, c2) {
     }
 }
 
-
 // --- Match Resolution & Board Update ---
 
 function findMatches() {
@@ -244,7 +243,6 @@ function findMatches() {
     return matches;
 }
 
-
 function isMatch(card1, card2) {
     if (!card1 || !card2 || card1.suit === 'empty' || card2.suit === 'empty') return false;
     if (card1.isJoker && card2.isJoker) return card1.color === card2.color;
@@ -256,13 +254,13 @@ function isMatch(card1, card2) {
 async function resolveInitialMatches() {
     let matches;
     while ((matches = findMatches()).size > 0) {
-        await resolveMatches(matches, false);
+        await resolveMatches(matches, false, true); // Pass true for isInitialCascade
     }
     isProcessing = false;
     if (checkGameOver()) endGame();
 }
 
-async function resolveMatches(matches, isPlayerMove) {
+async function resolveMatches(matches, isPlayerMove, isInitialCascade = false) {
     let cascadeScore = 0;
     let isFirstMatchInCascade = true;
 
@@ -271,7 +269,7 @@ async function resolveMatches(matches, isPlayerMove) {
         const matchScore = scoreMap[matches.size] || 20;
         score += matchScore;
 
-        if (gameMode === 'entrepreneur' && isPlayerMove && !isFirstMatchInCascade) {
+        if (gameMode === 'entrepreneur' && (isInitialCascade || (isPlayerMove && !isFirstMatchInCascade))) {
             cascadeScore += matchScore;
         }
 
@@ -299,7 +297,7 @@ async function resolveMatches(matches, isPlayerMove) {
     updateUI();
 
     if (board.flat().every(c => !c || c.suit === 'empty')) {
-        score += 100; // Perfect clear bonus
+        score += 100;
         updateUI();
         endGame();
         return;
@@ -309,44 +307,75 @@ async function resolveMatches(matches, isPlayerMove) {
     if (checkGameOver()) endGame();
 }
 
-
 async function applyGravityAndRefill() {
-    const fallPromises = [];
+    const animationPromises = [];
 
     for (let c = 0; c < COLS; c++) {
-        let emptyRow = ROWS - 1;
-        for (let r = ROWS - 1; r >= 0; r--) {
+        const currentColumnCards = [];
+        for (let r = 0; r < ROWS; r++) {
             if (board[r][c]) {
-                if (r !== emptyRow) {
-                    board[emptyRow][c] = board[r][c];
-                    board[r][c] = null;
-                    const cardEl = Array.from(gameBoard.children).find(el => el.dataset.r == r && el.dataset.c == c);
-                    if (cardEl) {
-                        cardEl.dataset.r = emptyRow;
-                        cardEl.style.transition = 'top 0.4s ease-in';
-                        cardEl.style.top = `${(emptyRow / ROWS) * 100}%`;
-                        fallPromises.push(new Promise(res => cardEl.addEventListener('transitionend', res, { once: true })));
-                    }
-                }
-                emptyRow--;
+                currentColumnCards.push(board[r][c]);
             }
         }
+
+        const realCards = currentColumnCards.filter(card => card.suit !== 'empty');
+        const emptyCards = currentColumnCards.filter(card => card.suit === 'empty');
+
+        let writeRow = 0;
+        for (const card of emptyCards) {
+            board[writeRow++][c] = card;
+        }
+        const realCardsStartRow = ROWS - realCards.length;
+        while (writeRow < realCardsStartRow) {
+            board[writeRow++][c] = null;
+        }
+        for (const card of realCards) {
+            board[writeRow++][c] = card;
+        }
+
+        currentColumnCards.forEach(card => {
+            const cardEl = Array.from(gameBoard.children).find(el => el.dataset.id == card.id);
+            if (cardEl) {
+                let newRow = -1;
+                for (let r = 0; r < ROWS; r++) {
+                    if (board[r][c] && board[r][c].id === card.id) {
+                        newRow = r;
+                        break;
+                    }
+                }
+
+                if (newRow !== -1 && newRow !== parseInt(cardEl.dataset.r)) {
+                    cardEl.dataset.r = newRow;
+                    cardEl.style.transition = 'top 0.4s ease-in';
+                    cardEl.style.top = `${(newRow / ROWS) * 100}%`;
+                    animationPromises.push(new Promise(res => {
+                        const onEnd = () => { cardEl.removeEventListener('transitionend', onEnd); res(); };
+                        cardEl.addEventListener('transitionend', onEnd);
+                    }));
+                }
+            }
+        });
     }
 
-    await Promise.all(fallPromises);
+    await Promise.all(animationPromises);
 
     for (let c = 0; c < COLS; c++) {
         for (let r = 0; r < ROWS; r++) {
-            if (!board[r][c]) {
+            if (board[r][c] === null) {
                 const newCard = (deckIndex < deck.length)
                     ? deck[deckIndex++]
-                    : { suit: 'empty', color: 'gray', emoji: '∅', id: -1 };
+                    : { suit: 'empty', color: 'gray', emoji: '∅', id: `empty-${Date.now()}-${Math.random()}` };
                 board[r][c] = newCard;
                 createCardElement(newCard, r, c, true);
-                await new Promise(r => setTimeout(r, 30));
+                await new Promise(res => setTimeout(res, 30));
             }
         }
     }
+
+    setTimeout(() => {
+        gameBoard.querySelectorAll('.card').forEach(el => el.style.transition = '');
+    }, 500);
+
     updateUI();
 }
 
@@ -358,7 +387,6 @@ function checkGameOver() {
 
     const hasJoker = board.flat().some(c => c && c.isJoker);
     if (grant > 0 || hasJoker) {
-        // Check for potential matches
         const suitCounts = { clubs:0, diamonds:0, hearts:0, spades:0 };
         let redJokers = 0, blackJokers = 0;
         board.flat().forEach(c => {
@@ -372,7 +400,7 @@ function checkGameOver() {
         if (suitCounts.spades + blackJokers >= 3) return false;
     }
 
-    return true; // Game over
+    return true;
 }
 
 function endGame() {
