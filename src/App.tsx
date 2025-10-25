@@ -7,12 +7,22 @@ const CardMatch3Game = () => {
   const [deck, setDeck] = useState([]);
   const [board, setBoard] = useState([]);
   const [score, setScore] = useState(0);
+  const [finalScore, setFinalScore] = useState(0);
   const [grant, setGrant] = useState(0);
   const [selectedCard, setSelectedCard] = useState(null);
   const [deckIndex, setDeckIndex] = useState(0);
-  const [highScores, setHighScores] = useState([
-    { date: 'Wed, Oct 22, 2025', score: 231 }
-  ]);
+  const [highScores, setHighScores] = useState(() => {
+    const savedHighScores = localStorage.getItem('highScores');
+    return savedHighScores ? JSON.parse(savedHighScores) : {
+      easy: [],
+      poverty: [],
+      entrepreneur: []
+    };
+  });
+
+  useEffect(() => {
+    localStorage.setItem('highScores', JSON.stringify(highScores));
+  }, [highScores]);
   const [isProcessing, setIsProcessing] = useState(false);
 
   const SUITS = ['♣', '♦', '♥', '♠'];
@@ -76,7 +86,7 @@ const CardMatch3Game = () => {
     setGameState('playing');
     
     // Check for initial matches after a brief delay
-    setTimeout(() => checkAndRemoveMatches(initialBoard, newDeck, idx, 0, selectedMode === 'easy' ? 120 : selectedMode === 'poverty' ? 20 : 7), 300);
+    setTimeout(() => checkAndRemoveMatches(initialBoard, newDeck, idx, 0, selectedMode === 'easy' ? 120 : selectedMode === 'poverty' ? 20 : 7, true), 300);
   };
 
   const findMatches = (board) => {
@@ -351,13 +361,17 @@ const CardMatch3Game = () => {
     }
   };
 
-  const endGame = (finalScore) => {
-    const newHighScores = [...highScores, { 
-      date: new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }), 
-      score: finalScore 
-    }];
-    newHighScores.sort((a, b) => b.score - a.score);
-    setHighScores(newHighScores.slice(0, 3));
+  const endGame = (finalScoreValue) => {
+    setFinalScore(finalScoreValue);
+    const newHighScores = { ...highScores };
+    const modeScores = [...(newHighScores[mode] || [])];
+    modeScores.push({
+      date: new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }),
+      score: finalScoreValue
+    });
+    modeScores.sort((a, b) => b.score - a.score);
+    newHighScores[mode] = modeScores.slice(0, 3);
+    setHighScores(newHighScores);
     setGameState('gameOver');
   };
 
@@ -408,11 +422,32 @@ const CardMatch3Game = () => {
 
           <div className="border-t pt-4">
             <h3 className="font-bold text-center mb-2">Top 3 High Scores</h3>
-            {highScores.map((hs, idx) => (
-              <div key={idx} className="text-sm text-center text-gray-700">
-                {hs.date}: {hs.score}
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div>
+                <h4 className="font-bold">Easy</h4>
+                {highScores.easy.map((hs, idx) => (
+                  <div key={idx} className="text-sm text-gray-700">
+                    {hs.date}: {hs.score}
+                  </div>
+                ))}
               </div>
-            ))}
+              <div>
+                <h4 className="font-bold text-green-700">Poverty</h4>
+                {highScores.poverty.map((hs, idx) => (
+                  <div key={idx} className="text-sm text-green-700">
+                    {hs.date}: {hs.score}
+                  </div>
+                ))}
+              </div>
+              <div>
+                <h4 className="font-black">Entrepreneur</h4>
+                {highScores.entrepreneur.map((hs, idx) => (
+                  <div key={idx} className="text-sm font-black">
+                    {hs.date}: {hs.score}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -424,11 +459,11 @@ const CardMatch3Game = () => {
       <div className="w-full h-screen bg-gradient-to-br from-green-800 to-green-950 flex items-center justify-center p-4">
         <div className="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full text-center">
           <h1 className="text-4xl font-bold mb-4 text-green-800">Game Over!</h1>
-          <p className="text-6xl font-bold text-purple-600 mb-6">{score}</p>
+          <p className="text-6xl font-bold text-green-600 mb-6">{finalScore}</p>
           
           <div className="border-t border-b py-4 mb-6">
-            <h3 className="font-bold mb-2">Top 3 High Scores</h3>
-            {highScores.map((hs, idx) => (
+            <h3 className="font-bold mb-2">Top 3 High Scores ({mode})</h3>
+            {(highScores[mode] || []).map((hs, idx) => (
               <div key={idx} className="text-sm text-gray-700">
                 {hs.date}: {hs.score}
               </div>
