@@ -328,46 +328,38 @@ async function applyGravityAndRefill() {
         ];
 
         for (let r = 0; r < ROWS; r++) {
-            if (board[r][c] !== newColumn[r]) {
-                board[r][c] = newColumn[r];
-            }
+            board[r][c] = newColumn[r];
         }
     }
 
-    // Animate existing cards
-    const allCards = Array.from(gameBoard.children);
-    allCards.forEach(cardEl => {
-        const id = isNaN(parseInt(cardEl.dataset.id)) ? cardEl.dataset.id : parseInt(cardEl.dataset.id);
-        let newRow = -1;
-        let newCol = -1;
-
+    const allCardElements = Array.from(gameBoard.children);
+    allCardElements.forEach(cardEl => {
+        const id = cardEl.dataset.id.startsWith('empty') ? cardEl.dataset.id : parseInt(cardEl.dataset.id);
+        let found = false;
         for (let r = 0; r < ROWS; r++) {
             for (let c = 0; c < COLS; c++) {
                 if (board[r][c] && board[r][c].id === id) {
-                    newRow = r;
-                    newCol = c;
+                    if (parseInt(cardEl.dataset.r) !== r || parseInt(cardEl.dataset.c) !== c) {
+                        cardEl.dataset.r = r;
+                        cardEl.dataset.c = c;
+                        cardEl.style.transition = 'top 0.4s ease-in, left 0.4s ease-in';
+                        cardEl.style.top = `${(r / ROWS) * 100}%`;
+                        cardEl.style.left = `${(c / COLS) * 100}%`;
+                        animationPromises.push(new Promise(res => {
+                            const onEnd = () => { cardEl.removeEventListener('transitionend', onEnd); res(); };
+                            cardEl.addEventListener('transitionend', onEnd);
+                        }));
+                    }
+                    found = true;
                     break;
                 }
             }
-            if (newRow !== -1) break;
-        }
-
-        if (newRow !== -1 && (newRow !== parseInt(cardEl.dataset.r) || newCol !== parseInt(cardEl.dataset.c))) {
-            cardEl.dataset.r = newRow;
-            cardEl.dataset.c = newCol;
-            cardEl.style.transition = 'top 0.4s ease-in, left 0.4s ease-in';
-            cardEl.style.top = `${(newRow / ROWS) * 100}%`;
-            cardEl.style.left = `${(newCol / COLS) * 100}%`;
-            animationPromises.push(new Promise(res => {
-                const onEnd = () => { cardEl.removeEventListener('transitionend', onEnd); res(); };
-                cardEl.addEventListener('transitionend', onEnd);
-            }));
+            if(found) break;
         }
     });
 
     await Promise.all(animationPromises);
 
-    // Refill empty spots
     for (let c = 0; c < COLS; c++) {
         for (let r = 0; r < ROWS; r++) {
             if (board[r][c] === null) {
@@ -382,7 +374,7 @@ async function applyGravityAndRefill() {
     }
 
     setTimeout(() => {
-        gameBoard.querySelectorAll('.card').forEach(el => el.style.transition = '';
+        gameBoard.querySelectorAll('.card').forEach(el => el.style.transition = '');
     }, 500);
 
     updateUI();
